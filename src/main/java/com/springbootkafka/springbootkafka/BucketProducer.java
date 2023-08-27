@@ -1,12 +1,11 @@
 package main.java.com.springbootkafka.springbootkafka;
 
-
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.riferrei.kafka.core.BucketPriorityConfig;
-import com.riferrei.kafka.core.BucketPriorityPartitioner;
-import com.riferrei.kafka.core.DiscardPartitioner;
+//import com.riferrei.kafka.core.BucketPriorityConfig;
+//import com.riferrei.kafka.core.BucketPriorityPartitioner;
+//import com.riferrei.kafka.core.DiscardPartitioner;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;

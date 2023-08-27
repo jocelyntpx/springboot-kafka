@@ -46,7 +46,8 @@ public class BucketPriorityPartitioner implements Partitioner {
             String bucketName = config.buckets().get(i).trim();
             buckets.put(bucketName, new Bucket(allocation.get(i)));
         }
-
+        // sort the buckets from higher to lower allocation
+        // aid later during allocation if unassigned partitions are found
         buckets = buckets.entrySet()
                 .stream()
                 .sorted(Map.Entry.comparingByValue())
@@ -60,7 +61,9 @@ public class BucketPriorityPartitioner implements Partitioner {
     public int partition(String topic, Object key, byte[] keyBytes,
                          Object value, byte[] valueBytes, Cluster cluster) {
         int partition = RecordMetadata.UNKNOWN_PARTITION;
-
+        // try applying bucket priority partitioning logic
+        // if none of the conditions apply, allow the partition to be
+        // set by the built-in partitioning logic from KIP-794
         if (config.topic() != null && config.topic().equals(topic)) {
             if (key instanceof String) {
                 String keyValue = (String) key;
@@ -79,7 +82,8 @@ public class BucketPriorityPartitioner implements Partitioner {
 
     private int getPartition(String bucketName, Cluster cluster) {
         int numPartitions = cluster.partitionCountForTopic(config.topic());
-
+        // check if number of partitions has changed,
+        // trigger update if yes
         if (lastPartitionCount != numPartitions) {
             updatePartitionsAssignment(cluster);
             lastPartitionCount = numPartitions;
@@ -98,11 +102,12 @@ public class BucketPriorityPartitioner implements Partitioner {
             message.append(buckets.size()).append(".");
             throw new InvalidConfigurationException(message.toString());
         }
-
+        // sort partitions in ascending order since the partitions will
+        // be mapped into the buckets from partition-0 to partition-n
         partitions = partitions.stream()
                 .sorted(Comparator.comparing(PartitionInfo::partition))
                 .collect(Collectors.toList());
-
+        // design the layout of the distribution
         int distribution = 0;
         Map<String, Integer> layout = new LinkedHashMap<>();
         for (Map.Entry<String, Bucket> entry : buckets.entrySet()) {
@@ -110,7 +115,9 @@ public class BucketPriorityPartitioner implements Partitioner {
             layout.put(entry.getKey(), bucketSize);
             distribution += bucketSize;
         }
-
+        // check if unassigned partitions exists,
+        // if exists, distribute them over the buckets starting from the top to bottom
+        // until there are no partitions left
         int remaining = partitions.size() - distribution;
         if (remaining > 0) {
             AtomicInteger counter = new AtomicInteger(-1);
@@ -127,7 +134,7 @@ public class BucketPriorityPartitioner implements Partitioner {
                 remaining--;
             }
         }
-
+        // lastly, assign the available partitions to buckets
         int partition = -1;
         TopicPartition topicPartition = null;
         bucketAssign: for (Map.Entry<String, Bucket> entry : buckets.entrySet()) {
@@ -145,7 +152,7 @@ public class BucketPriorityPartitioner implements Partitioner {
 
     @Override
     public void onNewBatch(String topic, Cluster cluster, int prevPartition) {
-
+        // function to stabilize the round-robin logic.
         String bucketName = lastBucket.get();
         Bucket bucket = buckets.get(bucketName);
         if (bucket != null) {

@@ -1,5 +1,5 @@
 package main.java.com.springbootkafka.springbootkafka;
- d
+
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -39,7 +39,7 @@ public class BucketConsumer {
             configs.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
             configs.setProperty(ConsumerConfig.GROUP_ID_CONFIG, ORDERS_PER_BUCKET + "-group");
 
-            // Implementing the bucket priority pattern
+            // implementing the bucket priority pattern
 
             configs.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                     BucketPriorityAssignor.class.getName());

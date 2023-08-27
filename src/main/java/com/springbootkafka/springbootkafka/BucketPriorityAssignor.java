@@ -57,6 +57,8 @@ public class BucketPriorityAssignor extends AbstractPartitionAssignor implements
             throw new InvalidConfigurationException("The fallback " +
                     "assignor configured is invalid.", ex);
         }
+        // sort buckets from higher to lower allocation
+        // aid in the allocation of unassigned partitions
         buckets = new LinkedHashMap<>();
         for (int i = 0; i < config.buckets().size(); i++) {
             String bucketName = config.buckets().get(i).trim();
@@ -90,7 +92,8 @@ public class BucketPriorityAssignor extends AbstractPartitionAssignor implements
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
         int numPartitions = partitionsPerTopic.get(config.topic());
-
+        // check if there is a change in the number of partitions
+        // trigger update if above is true
         if (lastPartitionCount != numPartitions) {
             updatePartitionsAssignment(numPartitions);
             lastPartitionCount = numPartitions;
@@ -119,7 +122,7 @@ public class BucketPriorityAssignor extends AbstractPartitionAssignor implements
                 otherTopicsSubscriptions.put(consumer, subscription);
             }
         }
-
+        // evenly distribute partitions across available consumers in per-bucket basis
         AtomicInteger counter = new AtomicInteger(-1);
         for (Map.Entry<String, Bucket> bucket : buckets.entrySet()) {
             List<String> consumers = consumersPerBucket.get(bucket.getKey());
@@ -133,7 +136,8 @@ public class BucketPriorityAssignor extends AbstractPartitionAssignor implements
                 }
             }
         }
-
+        // if subscriptions for topics that are not based on buckets exists,
+        // use fallback assignor to create their partition assignments
         if (!otherTopicsSubscriptions.isEmpty()) {
             Map<String, List<TopicPartition>> fallbackAssignments =
                     fallback.assign(partitionsPerTopic, otherTopicsSubscriptions);
@@ -152,11 +156,12 @@ public class BucketPriorityAssignor extends AbstractPartitionAssignor implements
             message.append(buckets.size()).append(".");
             throw new InvalidConfigurationException(message.toString());
         }
-
+        // sort partitions in ascending order since the partitions will
+        // be mapped into the buckets from partition-0 to partition-n
         partitions = partitions.stream()
                 .sorted(Comparator.comparing(TopicPartition::partition))
                 .collect(Collectors.toList());
-
+        // design the layout of the distribution
         int distribution = 0;
         Map<String, Integer> layout = new LinkedHashMap<>();
         for (Map.Entry<String, Bucket> entry : buckets.entrySet()) {
@@ -164,7 +169,9 @@ public class BucketPriorityAssignor extends AbstractPartitionAssignor implements
             layout.put(entry.getKey(), bucketSize);
             distribution += bucketSize;
         }
-
+        // check if unassigned partitions exists,
+        // if exists, distribute them over the buckets starting from the top to bottom
+        // until there are no partitions left
         int remaining = partitions.size() - distribution;
         if (remaining > 0) {
             AtomicInteger counter = new AtomicInteger(-1);
@@ -181,7 +188,7 @@ public class BucketPriorityAssignor extends AbstractPartitionAssignor implements
                 remaining--;
             }
         }
-
+        // lastly, assign the available partitions to buckets
         int partition = -1;
         TopicPartition topicPartition = null;
         bucketAssign: for (Map.Entry<String, Bucket> entry : buckets.entrySet()) {
